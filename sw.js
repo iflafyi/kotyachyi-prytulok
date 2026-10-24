@@ -1,6 +1,6 @@
 /* Котячий притулок: офлайн-кеш. Гра завжди бере свіжу версію з мережі, а без інтернету — з кешу. */
-const CACHE = 'kp-2026102506';
-const CORE = ['./', 'index.html', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'kp-2026102507';
+const CORE = ['./', 'art/sis-lime.png', 'art/sis-siam.png', 'index.html', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 const CDN = /^(https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com))\//;
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).catch(() => {})); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('kp-') && k !== CACHE && k !== 'kp-cdn').map(k => caches.delete(k)))).then(() => self.clients.claim())); });
