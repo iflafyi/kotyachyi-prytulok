@@ -43,6 +43,9 @@ Pages updates in ~1 min; check `https://iflafyi.github.io/kotyachyi-prytulok/ver
 - Talents: 4 branches (`TAL_BR` inc/care/adv/luck), ult talents at req 10 and 18; `c.talBuy` = bought points (max `TALBUY_MAX`, `talBuyCost`). Shelter `UPGRADES` have `m0` = old max (levels above it cost ×2.5·1.3^n, effects above old max are softer); new global upgrades souvenir/gym/maps/clinic/school/garden/amulab read via `upLv(k)`.
 - `dev/IDEAS.md` — numbered list of ideas for the next big update; the owner will pick numbers.
 
+## Multi-account (several players on one device)
+- Registry in localStorage `kp-profiles-v1` `{active, list:[{id,name,at}]}`; `PROF_ID` fixed per page load. Profile `main` keeps the legacy keys (`kotoprytulok_save`, auth `kotoprytulok-auth`); others use `__<id>` suffixes (`profSaveKey`/`profAuthKey`). Switching = save, set active, reload (`profSwitch`). UI: Settings → «Акаунти на цьому пристрої» (`renderProfiles`, `#profRow`).
+
 ## Save sync guard (old versions must not eat new progress)
 - `GAME_BUILD` = build id number; `serialize()` stamps `W.stamp = {b: GAME_BUILD, t: savedAt}`. A save whose stamp is missing or `stamp.t !== savedAt` was last written by pre-guard code (`legacySaved`).
 - Cloud `saves.version` (bigint) = GAME_BUILD; DB trigger `saves_build_guard` rejects updates with a lower version ("outdated game build"). Client then calls `needUpdate()` → saves locally and reloads.
