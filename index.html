@@ -100,6 +100,11 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:10p
 .ach .medal{grid-row:span 2;width:44px;height:44px}
 .ach .bar,.ach .btns{grid-column:1/-1}
 .ach.locked .medal{opacity:.35;filter:grayscale(1)}
+.eic{display:inline-block;margin-right:.32em;font-style:normal;line-height:1;font-weight:400}
+.ach .medalw{grid-row:span 2;position:relative;width:44px;height:44px;display:block}
+.ach .medalw .medal{width:44px;height:44px}
+.ach .medic{position:absolute;left:0;right:0;top:15px;text-align:center;font-style:normal;font-size:19px;line-height:24px}
+.ach.locked .medic{opacity:.6;filter:grayscale(.7)}
 .itemprev{width:64px;height:64px;flex:none;background:var(--surface2);border-radius:14px;display:grid;place-items:center}
 .itemprev svg{width:58px;height:58px}
 .credit{margin:-6px 4px 0}
@@ -3102,7 +3107,7 @@ function viewRescue(){
       const sit = sitById(a.sit);
       h += `<article class="card ${now()>=a.endsAt?'ready':'active'}" data-activecard="${a.id}">
         <div class="cathead"><div class="pic">${now()>=a.endsAt?catSVG({coat:a.coat},'a'+a.id):`<svg viewBox="0 0 100 100" width="50" height="50"><circle cx="50" cy="50" r="30" fill="none" stroke="var(--mint)" stroke-width="6" stroke-dasharray="20 12"/></svg>`}</div>
-        <div><b>${sit.t}</b><span class="small muted" data-atext="${a.id}"></span></div></div>
+        <div><b>${sitIc(sit)}${sit.t}</b><span class="small muted" data-atext="${a.id}"></span></div></div>
         <div class="bar mint" data-abar="${a.id}"><span></span></div>
         <div class="btns"><button class="btn primary" data-act="collect" data-id="${a.id}" data-abtn="${a.id}" ${now()>=a.endsAt?'':'hidden'}>Забрати котика</button></div>
       </article>`;
@@ -3116,7 +3121,7 @@ function viewRescue(){
     const sit = sitById(m.sit);
     const hidden = now() < m.hideUntil;
     h += `<article class="card mission">
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>${sit.t}</h3><span class="small muted">${rescueTime(sit)} с</span></div>
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>${sitIc(sit)}${sit.t}</h3><span class="small muted">${rescueTime(sit)} с</span></div>
       <p class="story" style="margin:0">${sit.d}</p>
       ${COATS[m.coat].rar || m.kitten ? `<div class="btns">${COATS[m.coat].rar ? `<span class="rar r${COATS[m.coat].rar}">Кажуть, тут ${RAR_NAMES[COATS[m.coat].rar].toLowerCase()} котик!</span>` : ''}${m.kitten ? '<span class="rar r1">Це кошеня!</span>' : ''}</div>` : ''}
       <div class="q" data-mhide="${m.id}">${hidden?'':'Що візьмеш?'}</div>
@@ -7477,6 +7482,109 @@ function uiStart(){
   pickEnhance();
 }
 uiLoad();
+
+/* ---------------- іконки-емодзі біля заголовків, кнопок і пунктів ----------------
+   Декоратор сам ставить емодзі перед текстом, що збігається з ключем (повністю або як початок).
+   Працює і для перекладу/інших видів тварин: ключі проганяються через xl(). */
+const ICON_MAP = {
+  // розділи й заголовки
+  'Подарунки':'🎁','Конкурси':'🏆','Клуби':'🏰','Клуб':'🏰','Дизайн кімнати':'🎨','Чат':'💬','Хтось потребує допомоги':'🆘',
+  'Хто піде на виставку?':'🏅','Хто переїде в спільний притулок?':'🏡','Учасники цього тижня':'👥','Уламки':'💎','Торгівля':'🤝',
+  'Таблиця лідерів':'🏆','Спорядження для порятунку':'🧰','Секретні улюбленці':'🔮','Сезонний пропуск':'🎟️','Розкішні прикраси':'👑',
+  'Ринок':'🏪','Резервна копія':'💾','Прохання про допомогу':'🙏','Притулок гравця':'🏠','Почати спочатку':'♻️','Покращення притулку':'🔨',
+  'Позичити улюбленця':'🤲','Подати цю кімнату на конкурс?':'🏆','Подарунок для':'🎁','Подарункові скрині':'📦','Перевір пошту':'📧',
+  'Панель розробника':'🛠️','Одяг':'👗','Нові кімнати':'🚪','Новини друзів':'📰','Новий пароль':'🔑','Налаштування':'⚙️','Надіслати фото?':'📸',
+  'Мій притулок':'🏠','Мої пропозиції':'📋','Мої друзі':'👫','Мешканці':'🐾','Мапа притулків':'🗺️','Котячий фонд':'💰','Корм':'🥫',
+  'Команда повернулася!':'🎉','Колесо фортуни':'🎡','Колекція забарвлень':'🌈','Кого віддати':'🔁','Знайти клуб':'🔍','Злиття':'✨',
+  'Завдання на сьогодні':'✅','Журнал подій':'📜','Експедиції':'🧭','Друзі':'👫','Друзям потрібна допомога':'🙋','Досягнення':'🏅',
+  'Грати на кількох пристроях':'📱','Гравці':'👥','Гардероб':'👗','Відновлення пароля':'🔑','Відвідувачі':'👋','Вичісування':'🪮',
+  'Виставити улюбленця':'🏷️','В дорозі':'🚶','Арена':'⚔️','Акаунт':'👤','Історії':'📖','Рибалка':'🎣','Який притулок залишити?':'🏠',
+  'Сезон':'🎟️','Секрети':'🔮','Світова подія':'🌍','Подвійне золото':'💰','Подвійний досвід':'⭐','Серія входів':'🔥',
+  // вкладки магазину й панелі розробника
+  'Колесо':'🎡','Дизайн':'🎨','Скрині':'📦','Розкіш':'👑','Покращення':'🔨','Кімнати':'🚪','Корм і спорядження':'🥫',
+  'Ресурси':'💰','Тварини':'🐾','Час і скидання':'⏱️','Оголошення':'📢','Події':'📅','Статистика':'📊','Прогрес гравців':'💾',
+  // спорядження
+  'Ласощі':'🍗','Ковдра':'🧣','Драбина':'🪜','Ліхтарик':'🔦','Переноска':'🧳',
+  // одяг
+  'Бантик':'🎀','Квіточка':'🌸','Шапочка з помпоном':'🧶','Корона':'👑','Окуляри':'👓','Окуляри-сердечка':'💕','Нашийник з дзвіночком':'🔔',
+  'Шарфик':'🧣','Метелик':'👔','Сяючий німб':'😇','Крильця':'🪽','Плащ героя':'🦸','Зіркові окуляри':'🤩',
+  // покращення та корм
+  'Нові вольєри':'🏠','Миски й годівниці':'🥣','Іграшки й дряпка':'🧶','Скринька пожертв':'💝','Затишок':'🪴','Ветеринарний кабінет':'🩺',
+  'Рятувальний фургон':'🚐','Досвідчені рятувальники':'🦺','Пакетик корму':'🥫','Мішок корму':'🛍️','Великий запас':'📦',
+  // кнопки
+  'Забрати нагороду':'🎁','Забрати оплату':'💰','Забрати':'🎁','Написати':'✍️','Надіслати лист':'📧','Надіслати':'📨','У гості':'🚪','Оновити':'🔄',
+  'Готово':'✅','У притулок':'🏠','Створити свій профіль':'👤','Створити':'➕','Прийняти':'✅','Позичити':'🤲','Щоденні завдання':'📋',
+  'Щоденну серію':'🔥','До таблиці лідерів':'🏆','Сюжетні квести':'📖','Стіни й підлога':'🧱','Спільний притулок':'🏡','Скопіювати':'📋',
+  'Реєстрація':'📝','Приєднатися за кодом':'🔑','Приєднатися':'🤝','Почати нову гру':'♻️','Порятунки':'🛟','Попросити друзів':'🙏',
+  'Показати фото':'📸','Показати':'👀','Показати 2D':'🖼️','Показати 3D':'🧊','Показати копії':'💾','Показати код збереження':'🔑','Подякувати':'💐','Подарувати':'🎁','Поговорити':'💬',
+  'Повернутися додому':'🏠','Повернути':'↩️','Опублікувати':'📢','Обмін':'🔁','Новини':'📰','Навчання':'🎓','Мої меблі':'🛋️','Купити':'🛒',
+  'Конкурс кімнат':'🏆','Зустріти команду':'👋','Змінити ім’я':'✏️','Зберегти пароль':'🔑','Завдання сезону':'🎟️','Заблокувати':'🚫',
+  'Допомогти':'🤝','Гратися':'🧶','Грати з ботами':'🤖','Відновити з коду':'📥','Віддати улюбленця':'💝','Вхід':'🔐','Увійти':'🔐',
+  'Вступити':'🤝','Встановити':'📲','Вкласти монетки':'💰','Виставка улюбленців':'🏅','Виставити':'🏷️','Вирушити':'🚀','Викликати':'⚔️',
+  'Вийти з клубу':'🚪','Вийти з акаунта':'🚪','Вибрати команду':'👥','Безкоштовне обертання':'🎡','Закинути вудку':'🎣','Крутити':'🎡',
+  'Вилікувати':'💊','Вичесати':'🪮','Прокачати':'⬆️','Одягнути':'👗','Лазер':'🔴','Зібрати':'💎','Відкрити':'📦','Проголосувати':'🗳️',
+  // налаштування й поля
+  'Звук і мяукання':'🔊','Тема':'🌓','Сезонне оформлення':'🎃','Повний екран':'🖥️','Мова · Язык':'🌐','Підказки для новачків':'💡',
+  'Назва притулку':'🏷️','Email акаунта':'📧','Email':'📧','Пароль':'🔑','Ім’я гравця':'👤','Код збереження':'🔑',
+  // статистика
+  'Врятовано котиків':'🛟','Знайшли родину':'🏡','Погладжено разів':'✋','Нагодовано разів':'🍽️','Зароблено монеток':'💰',
+  'Зібрано забарвлень':'🌈','Виросло кошенят':'🍼','Вилікувано':'💊','Вичесано':'🪮','Пар найкращих друзів':'💞',
+  // завдання (за початком тексту)
+  'Погладь':'✋','Нагодуй':'🍽️','Врятуй':'🛟','Поговори':'💬','Зіграй у':'🎮','Допоможи':'🤝','Крутни колесо':'🎡','Прокачай':'⬆️',
+  'Пограй':'🔴','Вичеши':'🪮','Доглянь':'🪮','Поверни команду':'🧭','Напиши':'💬','Відкрий скриню':'📦','Подаруй':'🎁','Проголосуй':'🗳️',
+  'Пройди крок':'📖'
+};
+const ICON_ARENA = /^Зіграй \d+ гр/;
+/* іконки випадків порятунку: за id, інакше за потрібним спорядженням */
+const SIT_IC = {trash:'🗑️', box:'🌧️', engine:'🚗', tree:'🌳', basement:'🕯️', road:'🚋', roof:'🏚️', frost:'❄️', shed:'🛖', paw:'🩹'};
+const TOOL_IC = {treats:'🍗', blanket:'🧣', ladder:'🪜', flashlight:'🔦', carrier:'🧳'};
+const sitIc = sit => `<span class="eic" aria-hidden="true" data-nol10n>${SIT_IC[sit.id] || TOOL_IC[sit.tool] || '🐾'}</span>`;
+/* іконки досягнень на медалях */
+const ACH_IC = {rescue10:'🛟', rescue50:'🦸', collect10:'🌈', collectAll:'🖼️', legend:'🌟', mythic:'🦄', pets200:'✋', fed100:'🍽️', adopt5:'🏡',
+  catlvl10:'🏆', fish30:'🎣', visitors25:'👋', friends:'💞', kitten:'🍼', groom10:'🪮', cure5:'🩺', dress:'👗', laser:'🔴', rooms:'🏰', level10:'⭐', coins10k:'💰'};
+{ const f0 = medalSVG; medalSVG = function(done, i){ const a = ACH[i], ic = a && ACH_IC[a.id];
+    return ic ? `<span class="medalw">${f0(done, i)}<i class="medic" aria-hidden="true">${ic}</i></span>` : f0(done, i); }; }
+
+const ICON_SEL = 'h2,h3,h4,button,label,.task>span:first-child,.statlist>span,.setrow>:first-child';
+const ICON_SKIP = '#tabs,.advtile,.pickpet,.pickgrid2,.picktools,.sticker,.stickpick,[data-nol10n],svg,.bub3,.cathead h3,.iconbtn,.chatmsg,textarea,.wheelwrap';
+const EMOJI_START = /^[\p{Extended_Pictographic}←-⇿⌀-➿⬀-⯿]/u;
+let ICON_KEYS = null, ICON_FOR = '';
+function iconKeys(){
+  const tag = LANG + '|' + ((S && S.sp) || 'cat');
+  if (ICON_KEYS && ICON_FOR === tag) return ICON_KEYS;
+  const m = new Map();
+  for (const [k, ic] of Object.entries(ICON_MAP)){ m.set(k, ic); try { const x = xl(k); if (x && x !== k && !m.has(x)) m.set(x, ic); } catch(e){} }
+  ICON_KEYS = [...m.entries()].sort((a, b) => b[0].length - a[0].length); ICON_FOR = tag;
+  return ICON_KEYS;
+}
+function iconFor(text){
+  if (ICON_ARENA.test(text)) return '⚔️';
+  for (const [k, ic] of iconKeys()){
+    if (text.length < k.length || !text.startsWith(k)) continue;
+    const nx = text[k.length];
+    if (nx === undefined || /[\s·:(!?,.…«]/.test(nx)) return ic;
+  }
+  return null;
+}
+function iconPass(){
+  iconRaf = 0;
+  document.querySelectorAll(ICON_SEL).forEach(el => {
+    const txt = el.textContent; if (el.dataset.eicT === txt) return;
+    el.dataset.eicT = txt;
+    if (el.closest(ICON_SKIP) || el.querySelector('.eic,svg,img,.ic')) return;
+    if (el.parentElement && el.parentElement.closest('[data-eic-on]')) return;
+    const t = txt.trim(); if (!t || EMOJI_START.test(t)) return;
+    const ic = iconFor(t); if (!ic) return;
+    const sp = document.createElement('span'); sp.className = 'eic'; sp.setAttribute('aria-hidden', 'true'); sp.setAttribute('data-nol10n', ''); sp.textContent = ic;
+    el.insertBefore(sp, el.firstChild);
+    el.setAttribute('data-eic-on', ''); el.dataset.eicT = el.textContent;
+  });
+}
+let iconRaf = 0;
+const iconSoon = () => { if (!iconRaf) iconRaf = requestAnimationFrame(iconPass); };
+{ const f0 = uiStart; uiStart = function(){ f0();
+    new MutationObserver(iconSoon).observe(document.body, {childList:true, subtree:true, characterData:true});
+    iconSoon(); }; }
 function devStart(){
   pwaInit();
   if (!netReady()) return;
@@ -7671,7 +7779,7 @@ function start(data){
   setInterval(loop, 1000);
 }
 /* ================= Простий хостинг: збереження в браузері + оновлення ================= */
-const BUILD = '202610250724';
+const BUILD = '202610250739';
 aiOff = true; sampleFn = null;   // живі розмови з Claude тут не підключені — котики відповідають готовими фразами
 async function checkUpdate(){
   try { const r = await fetch('version.json?t=' + Date.now(), { cache:'no-store' }); if (!r.ok) return;
