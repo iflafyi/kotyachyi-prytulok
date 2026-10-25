@@ -1,0 +1,6 @@
+dev/test/t/
+dev/test/node_modules/
+dev/i18n/node_modules/
+dev/i18n/uk_static.json
+dev/i18n/miss.txt
+__pycache__/

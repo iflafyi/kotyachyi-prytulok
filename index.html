@@ -7465,7 +7465,7 @@ function start(data){
   setInterval(loop, 1000);
 }
 /* ================= Простий хостинг: збереження в браузері + оновлення ================= */
-const BUILD = '2026102507';
+const BUILD = '2026102508';
 aiOff = true; sampleFn = null;   // живі розмови з Claude тут не підключені — котики відповідають готовими фразами
 async function checkUpdate(){
   try { const r = await fetch('version.json?t=' + Date.now(), { cache:'no-store' }); if (!r.ok) return;
