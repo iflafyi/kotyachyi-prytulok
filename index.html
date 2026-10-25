@@ -604,6 +604,7 @@ body:has(#modalRoot .overlay){overflow:hidden}
    2) якщо змінюєш формат — підвищ VERSION і додай крок у migrate().
    ============================================================ */
 const VERSION = 1;
+const GAME_BUILD = Number('202610251425') || 0;   // номер збірки сайту (підставляє build.py)
 const LOCAL_KEY = 'kotoprytulok_save';
 const MAX_OFFLINE = 8 * 3600; // сек
 
@@ -1314,7 +1315,26 @@ function catchUp(){
 
 /* ---------------- saving ---------------- */
 let cloudDoc = null, cloudBusy = false, dirty = false, cloudDirty = false, lastLocal = 0, lastCloud = 0;
-function serialize(){ W.savedAt = now(); return JSON.stringify(W); }
+function serialize(){ W.savedAt = now(); W.stamp = {b: GAME_BUILD, t: W.savedAt}; return JSON.stringify(W); }
+/* Захист від старих версій гри: кожне збереження позначене номером збірки.
+   Стара версія не бере новіший прогрес (інакше вона викине невідомих їй котиків і речі),
+   а сервер не дає їй перезаписати хмару. Збереження, яке переписала зовсім стара версія
+   без позначок, видно за тим, що позначка не збігається з часом збереження. */
+const stampB = w => (w && w.stamp && +w.stamp.b) || 0;
+const legacySaved = w => !w || !w.stamp || w.stamp.t !== w.savedAt;
+let outdated = false;
+function needUpdate(){
+  if (outdated) return; outdated = true;
+  try { if (S && !visiting) saveLocal(); } catch(e){}
+  toast('Вийшла нова версія гри — оновлюю, щоб не загубити прогрес…');
+  setTimeout(() => location.reload(), 1500);
+}
+async function newerBuildOut(){
+  if (!window.KP_STATIC || !GAME_BUILD) return false;
+  try { const r = await fetch('version.json?t=' + Date.now(), {cache:'no-store'}); if (!r.ok) return false;
+    const v = await r.json(); if (+v.build > GAME_BUILD){ needUpdate(); return true; } } catch(e){}
+  return false;
+}
 function saveLocal(){
   if (visiting) return;
   try { localStorage.setItem(LOCAL_KEY, serialize()); } catch(e){}
@@ -1334,15 +1354,16 @@ async function manualSave(){
   setTimeout(()=>{ b.disabled = false; b.textContent = 'Зберегти гру'; }, 1500);
 }
 async function saveCloud(){
-  if (visiting || !cloudDoc || cloudBusy) return false;
+  if (visiting || !cloudDoc || cloudBusy || outdated) return false;
   cloudBusy = true; cloudDirty = false;
   try {
     const json = serialize();
-    await cloudDoc.set({state:json, savedAt:S.savedAt, version:VERSION});
+    await cloudDoc.set({state:json, savedAt:S.savedAt, version:GAME_BUILD || VERSION});
     lastCloud = now(); setSaveStatus('cloud');
     return true;
   } catch(e){
     cloudDirty = true;
+    if (/outdated/i.test((e && (e.message||e.details)) || '')) needUpdate();
     if (e && (e.code==='revoked'||e.code==='not_granted'||e.code==='invalid_argument')){ cloudDoc=null; setSaveStatus('device'); }
   } finally { cloudBusy = false; }
   return false;
@@ -4428,8 +4449,9 @@ const hasProgress = w => !!w && !!w.houses && (Object.keys(w.houses).length > 1 
 function makeCloudDoc(uid){
   return { set: async ({state, savedAt, version}) => {
     // якщо інший пристрій уже записав новіший прогрес, не перезаписуємо його, а підтягуємо
-    const cur = await db().from('saves').select('saved_at').eq('user_id', uid).maybeSingle();
+    const cur = await db().from('saves').select('saved_at,version').eq('user_id', uid).maybeSingle();
     if (cur.error) throw cur.error;
+    if (cur.data && +cur.data.version > (GAME_BUILD || VERSION)){ needUpdate(); throw new Error('outdated'); }
     const known = Math.max(acct.cloudAt, acct.sentAt);
     if (cur.data && Date.parse(cur.data.saved_at) > known + 1000){
       const cloud = await fetchCloud();
@@ -4445,7 +4467,16 @@ async function fetchCloud(){
   const { data, error } = await db().from('saves').select('state').eq('user_id', acct.user.id).maybeSingle();
   if (error) throw error;
   if (!data || !data.state) return null;
-  try { return migrate(JSON.parse(data.state)); } catch(e){ return null; }
+  let raw; try { raw = JSON.parse(data.state); } catch(e){ return null; }
+  if (stampB(raw) > GAME_BUILD){ needUpdate(); throw new Error('outdated'); }
+  try { return migrate(raw); } catch(e){ return null; }
+}
+/* яке з двох збережень того самого притулку залишити: спершу те, яке не псувала стара версія, потім новіше */
+function cloudWins(cloud, mine){
+  const lc = legacySaved(cloud), lm = legacySaved(mine);
+  if (lm && !lc) return true;
+  if (lc && !lm) return false;
+  return (cloud.savedAt||0) > (mine.savedAt||0);
 }
 function adoptState(st){
   if (visiting) endVisit();
@@ -4478,12 +4509,13 @@ async function onSignedIn(user){
   acct.busy = true; acct.user = user; acct.lastEmail = user.email || acct.lastEmail;
   closeAuth();
   try {
+    if (await newerBuildOut()) return;
     const cloud = await fetchCloud();
     const mine = W;
     const link = async () => { cloudDoc = makeCloudDoc(user.id); await saveCloud(); };
     if (cloud) acct.cloudAt = cloud.savedAt || 0;
     if (!cloud){ await link(); note('Прогрес прив’язано до акаунта. Тепер він синхронізується на всіх твоїх пристроях'); }
-    else if (cloud.createdAt === mine.createdAt){ if ((cloud.savedAt||0) > (mine.savedAt||0)) adoptState(cloud); else acct.cloudAt = 0; await link(); toast('Прогрес синхронізовано'); }
+    else if (cloud.createdAt === mine.createdAt){ if (cloudWins(cloud, mine)) adoptState(cloud); else acct.cloudAt = 0; await link(); toast('Прогрес синхронізовано'); }
     else if (!hasProgress(mine)){ adoptState(cloud); cloudDoc = makeCloudDoc(user.id); toast('Завантажено твій притулок з акаунта'); }
     else if (!hasProgress(cloud)){ acct.cloudAt = 0; await link(); toast('Прогрес прив’язано до акаунта'); }
     else pickSave(cloud, mine, user.id);
@@ -4511,10 +4543,11 @@ function pickSave(cloud, mine, uid){
   document.getElementById('pkLocal').onclick = async () => { root.innerHTML = ''; acct.picking = false; acct.cloudAt = Date.now(); cloudDoc = makeCloudDoc(uid); await saveCloud(); setSaveStatus('cloud'); renderAccount(); toast('Притулок з цього пристрою збережено в акаунті'); };
 }
 async function syncCheck(){
-  if (!acct.user || !cloudDoc || acct.busy || acct.picking || visiting) return;
+  if (!acct.user || !cloudDoc || acct.busy || acct.picking || visiting || outdated) return;
+  if (await newerBuildOut()) return;
   try {
     const cloud = await fetchCloud();
-    if (cloud && (cloud.savedAt||0) > Math.max(acct.cloudAt, acct.sentAt) + 1000){ acct.cloudAt = cloud.savedAt; adoptState(cloud); toast('Завантажено новіший прогрес з іншого пристрою'); }
+    if (cloud && (cloud.savedAt||0) > Math.max(acct.cloudAt, acct.sentAt) + 1000 && !(legacySaved(cloud) && !legacySaved(W))){ acct.cloudAt = cloud.savedAt; adoptState(cloud); toast('Завантажено новіший прогрес з іншого пристрою'); }
   } catch(e){}
 }
 async function signOut(){
@@ -8181,7 +8214,7 @@ function start(data){
   setInterval(loop, 1000);
 }
 /* ================= Простий хостинг: збереження в браузері + оновлення ================= */
-const BUILD = '202610251337';
+const BUILD = '202610251425';
 aiOff = true; sampleFn = null;   // живі розмови з Claude тут не підключені — котики відповідають готовими фразами
 async function checkUpdate(){
   try { const r = await fetch('version.json?t=' + Date.now(), { cache:'no-store' }); if (!r.ok) return;
